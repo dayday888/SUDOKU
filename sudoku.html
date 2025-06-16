@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sudoku Generator - Dark Mode</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: #f0f0f0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+    }
+
+    .sudoku-board {
+      display: grid;
+      grid-template-columns: repeat(9, 42px);
+      grid-template-rows: repeat(9, 42px);
+      gap: 0;
+      border: 3px solid #888;
+      margin-bottom: 20px;
+    }
+
+    .cell {
+      width: 40px;
+      height: 40px;
+      text-align: center;
+      font-size: 18px;
+      background-color: #1e1e1e;
+      color: #ffffff;
+      border: 1px solid #333;
+      box-sizing: border-box;
+    }
+
+    .cell:focus {
+      outline: 2px solid #00bcd4;
+    }
+
+    .invalid {
+      background-color: #ff4d4d !important;
+    }
+
+    .prefilled {
+      background-color: #2c2c2c;
+      font-weight: bold;
+    }
+
+    .button-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      background-color: #333;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #555;
+    }
+
+    #status, #timer {
+      margin-top: 10px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>SUDOKU</h2>
+
+  <div class="sudoku-board" id="sudokuBoard"></div>
+
+  <div class="button-group">
+    <button onclick="generatePuzzle()">🎲 Acak Puzzle</button>
+    <button onclick="giveHint()">💡 Hint</button>
+    <button onclick="checkBoard()">✅ Periksa</button>
+    <button onclick="solvePuzzle()">🤖 Solve</button>
+    <button onclick="resetBoard()">🔄 Reset</button>
+  </div>
+
+  <p id="timer">⏱️ 00:00</p>
+  <p id="status"></p>
+
+  <script>
+    const board = document.getElementById('sudokuBoard');
+    const statusText = document.getElementById('status');
+    const timerText = document.getElementById('timer');
+
+    let cells = [];
+    let puzzle = [];
+    let solution = [];
+    let timerInterval;
+    let seconds = 0;
+
+    function createBoard() {
+      board.innerHTML = '';
+      cells = [];
+
+      for (let row = 0; row < 9; row++) {
+        cells[row] = [];
+        for (let col = 0; col < 9; col++) {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.maxLength = 1;
+          input.classList.add('cell');
+          input.dataset.row = row;
+          input.dataset.col = col;
+
+          // Tambahkan garis tebal per 3x3
+          if (col % 3 === 0) input.style.borderLeft = '3px solid #888';
+          if (row % 3 === 0) input.style.borderTop = '3px solid #888';
+          if (col === 8) input.style.borderRight = '3px solid #888';
+          if (row === 8) input.style.borderBottom = '3px solid #888';
+
+          input.addEventListener('input', () => {
+            input.value = input.value.replace(/[^1-9]/g, '');
+            input.classList.remove('invalid');
+          });
+
+          board.appendChild(input);
+          cells[row][col] = input;
+        }
+      }
+    }
+
+    function generateFullBoard() {
+      let board = Array.from({ length: 9 }, () => Array(9).fill(0));
+      function isValid(board, row, col, num) {
+        for (let i = 0; i < 9; i++) {
+          if (board[row][i] === num || board[i][col] === num) return false;
+        }
+        const startRow = row - row % 3;
+        const startCol = col - col % 3;
+        for (let i = 0; i < 3; i++) {
+          for (let j = 0; j < 3; j++) {
+            if (board[startRow + i][startCol + j] === num) return false;
+          }
+        }
+        return true;
+      }
+
+      function solve(board) {
+        for (let row = 0; row < 9; row++) {
+          for (let col = 0; col < 9; col++) {
+            if (board[row][col] === 0) {
+              let nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
+              for (let num of nums) {
+                if (isValid(board, row, col, num)) {
+                  board[row][col] = num;
+                  if (solve(board)) return true;
+                  board[row][col] = 0;
+                }
+              }
+              return false;
+            }
+          }
+        }
+        return true;
+      }
+
+      solve(board);
+      return board;
+    }
+
+    function removeCells(fullBoard, emptyCells = 40) {
+      let puzzle = fullBoard.map(row => [...row]);
+      let removed = 0;
+      while (removed < emptyCells) {
+        let row = Math.floor(Math.random() * 9);
+        let col = Math.floor(Math.random() * 9);
+        if (puzzle[row][col] !== 0) {
+          puzzle[row][col] = 0;
+          removed++;
+        }
+      }
+      return puzzle;
+    }
+
+    function generatePuzzle() {
+      clearInterval(timerInterval);
+      seconds = 0;
+      updateTimer();
+
+      const full = generateFullBoard();
+      const puzzleBoard = removeCells(full, 40);
+
+      puzzle = puzzleBoard;
+      solution = full;
+
+      createBoard();
+      statusText.textContent = '';
+
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          const value = puzzle[row][col];
+          const cell = cells[row][col];
+          if (value !== 0) {
+            cell.value = value;
+            cell.disabled = true;
+            cell.classList.add('prefilled');
+          } else {
+            cell.value = '';
+            cell.disabled = false;
+            cell.classList.remove('prefilled');
+          }
+        }
+      }
+
+      timerInterval = setInterval(() => {
+        seconds++;
+        updateTimer();
+      }, 1000);
+    }
+
+    function updateTimer() {
+      const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
+      const secs = String(seconds % 60).padStart(2, '0');
+      timerText.textContent = `⏱️ ${mins}:${secs}`;
+    }
+
+    function getGrid() {
+      return cells.map(row =>
+        row.map(cell => parseInt(cell.value) || 0)
+      );
+    }
+
+    function checkBoard() {
+      let valid = true;
+      statusText.textContent = '';
+      cells.flat().forEach(cell => cell.classList.remove('invalid'));
+
+      const grid = getGrid();
+
+      for (let i = 0; i < 9; i++) {
+        const rowSet = new Set();
+        const colSet = new Set();
+
+        for (let j = 0; j < 9; j++) {
+          const rowVal = grid[i][j];
+          const colVal = grid[j][i];
+
+          if (rowVal && rowSet.has(rowVal)) {
+            markInvalid(i, j, 'row', rowVal);
+            valid = false;
+          }
+          rowSet.add(rowVal);
+
+          if (colVal && colSet.has(colVal)) {
+            markInvalid(j, i, 'col', colVal);
+            valid = false;
+          }
+          colSet.add(colVal);
+        }
+      }
+
+      statusText.textContent = valid ? '✅ Sudoku valid!' : '❌ Ada kesalahan!';
+    }
+
+    function markInvalid(row, col, type, value) {
+      cells.forEach((r, i) => {
+        r.forEach((c, j) => {
+          if (
+            parseInt(c.value) === value &&
+            (
+              (type === 'row' && i === row) ||
+              (type === 'col' && j === col)
+            )
+          ) {
+            c.classList.add('invalid');
+          }
+        });
+      });
+    }
+
+    function giveHint() {
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          const cell = cells[row][col];
+          if (!cell.value) {
+            cell.value = solution[row][col];
+            return;
+          }
+        }
+      }
+      statusText.textContent = "👍 Semua sudah terisi!";
+    }
+
+    function solvePuzzle() {
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          const cell = cells[row][col];
+          cell.value = solution[row][col];
+        }
+      }
+      statusText.textContent = "✅ Puzzle diselesaikan otomatis.";
+    }
+
+    function resetBoard() {
+      createBoard();
+      clearInterval(timerInterval);
+      seconds = 0;
+      updateTimer();
+      statusText.textContent = '';
+    }
+
+    // Otomatis mulai
+    generatePuzzle();
+  </script>
+</body>
+</html>
